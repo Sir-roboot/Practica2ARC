@@ -109,9 +109,15 @@ int main() {
         limpiarPantalla(ledBase, width, height);
 
         // 4) Inicializar los objetos del juego
+        AppleType*  apple = initializeApple(ledBase, width);
         SnakeType*  snake = initializeSnake(ledBase, width);
 
-        // 5) Definir la dirección inicial de la serpiente
+         // 5) Colocar la primera manzana en posición aleatoria
+        int pos = 60;  // semilla inicial
+        pos = generateApplePosition(apple, ledBase, width, height, pos);
+        paintLEDs(apple->sections, 4, APPLE_COLOR);
+
+        // 6) Definir la dirección inicial de la serpiente
         motion currentDir = DOWN;
 
         // Variables auxiliares para coordenadas de cabeza
@@ -120,19 +126,19 @@ int main() {
 
         // Bucle interior de juego: se repetirá hasta GAME OVER
         while (1) {
-            // 6.1) Leer D-Pad y actualizar currentDir (no permite 180°)
+            // 7.1) Leer D-Pad y actualizar currentDir (no permite 180°)
             if      (*d_pad_up == 1    && currentDir != DOWN)  currentDir = UP;
             else if (*d_pad_do == 1    && currentDir != UP)    currentDir = DOWN;
             else if (*d_pad_le == 1    && currentDir != RIGHT) currentDir = LEFT;
             else if (*d_pad_ri == 1    && currentDir != LEFT)  currentDir = RIGHT;
 
-            // 6.2) Obtener la posición actual de la cabeza en coordenadas (x,y)
+            // 7.2) Obtener la posición actual de la cabeza en coordenadas (x,y)
             oldHeadLed = snake->head->leds[0];
             index      = oldHeadLed - ledBase;   // índice lineal
             headX      = index %  width;         // columna
             headY      = index /  width;         // fila
 
-            // 6.3) Simular el siguiente paso en (newX,newY)
+            // 7.3) Simular el siguiente paso en (newX,newY)
             int newX = headX, newY = headY;
             switch (currentDir) {
                 case UP:    newY--; break;
@@ -141,12 +147,12 @@ int main() {
                 case RIGHT: newX++; break;
             }
 
-            // 6.4) Detectar colisión con el borde antes de mover
+            // 7.4) Detectar colisión con el borde antes de mover
             if (checkBoundary(newX, newY, width, height)) {
                 break;  // GAME OVER por salirse de la matriz
             }
 
-            // 6.5) Detectar choque inminente leyendo solo 2 LEDs frontales
+            // 7.5) Detectar choque inminente leyendo solo 2 LEDs frontales
             volatile unsigned int* headFront[2];
             switch (currentDir) {
                 case UP:
@@ -167,13 +173,14 @@ int main() {
                     break;
             }
 
-            // 6.6) Evaluar tipo de colisión y actuar en consecuencia
+            // 7.6) Evaluar tipo de colisión y actuar en consecuencia
             CollisionType col = checkCollisionByColor(headFront);
             if (col == COLLISION_SELF) {
                 break;  // GAME OVER al chocar contra sí misma
             }
             else if (col == COLLISION_APPLE) {
                 // Crece y reposiciona la manzana
+                updateApple(apple, ledBase, width, height, &pos);
                 growSnake(snake, currentDir, width);
             }
             else {
@@ -181,12 +188,17 @@ int main() {
                 motionSnake(snake, currentDir, width);
             }
 
-            // 6.7) Retardo para controlar la velocidad del juego
+            // 7.7) Retardo para controlar la velocidad del juego
             delay_ms(1);
         }
 
+        // 8) Liberar memoria de la partida terminada
+        free(apple->sections);
+        free(apple);
+        freeSnake(snake);
+
         
-        // 7) Parpadeo de LED esquina en naranja esperando SW0
+        // 9) Parpadeo de LED esquina en naranja esperando SW0
         volatile unsigned int* corner_led = ledBase;  // puntero a LED [0,0]
         while (!(*switch_base & SW0)) {
             // Enciende naranja
@@ -201,6 +213,64 @@ int main() {
 
     return 0;
 }
+
+
+/*─── IMPLEMENTACIONES: APPLE ────────────────────────────────────────────────*/
+
+/**
+ * initializeApple:
+ *   Reserva una estructura AppleType y un array de 4 punteros para
+ *   las secciones de la manzana. No coloca aún la manzana en pantalla.
+ */
+AppleType* initializeApple(volatile unsigned int* ledBase, int width) {
+    AppleType* a = malloc(sizeof(*a));
+    a->sections  = malloc(4 * sizeof(*(a->sections)));
+    return a;
+}
+
+/**
+ * generateApplePosition:
+ *   Usa randomPosition para obtener un índice lineal válido para un
+ *   bloque 2×2. Asigna los cuatro punteros de apple->sections
+ *   apuntando a esa posición (esquina sup-izq y sus tres LEDs vecinos).
+ *   Devuelve el índice lineal para usar como semilla la próxima vez.
+ */
+int generateApplePosition(AppleType* apple, volatile unsigned int* ledBase, int width, int height, int seed) {
+    int pos = randomPosition(width, height, seed);
+    apple->sections[0] = ledBase + pos;
+    apple->sections[1] = ledBase + pos + 1;
+    apple->sections[2] = ledBase + pos + width;
+    apple->sections[3] = ledBase + pos + width + 1;
+    return pos;
+}
+
+/**
+ * updateApple:
+ *   Borra la manzana actual (poniendo BLACK en oldLEDs),
+ *   genera una nueva posición aleatoria repetidamente hasta
+ *   encontrar una zona libre (isFreeZone), y pinta la nueva
+ *   manzana con APPLE_COLOR.
+ */
+void updateApple(AppleType* apple, volatile unsigned int* ledBase, int width, int height, int* seed) {
+    // Guardar punteros antiguos para borrarlos
+    volatile unsigned int* oldLEDs[4] = {
+        apple->sections[0],
+        apple->sections[1],
+        apple->sections[2],
+        apple->sections[3]
+    };
+
+    // Reubicar hasta hallar zona libre
+    do {
+        *seed = generateApplePosition(apple, ledBase, width, height, *seed);
+    } while (!isFreeZone(ledBase, *seed, width));
+
+    // Borrar colores de la vieja manzana
+    paintLEDs(oldLEDs, 4, BLACK);
+    // Pintar la nueva manzana
+    paintLEDs(apple->sections, 4, APPLE_COLOR);
+}
+
 
 
 /*─── IMPLEMENTACIONES: SNAKE ────────────────────────────────────────────────*/
@@ -309,6 +379,35 @@ CollisionType checkCollisionByColor(volatile unsigned int* headLeds[2]) {
 /*─── IMPLEMENTACIONES: UTILIDADES ──────────────────────────────────────────*/
 
 /**
+ * randomPosition:
+ *   - Reinicia el generador de números aleatorios usando `seed`.
+ *   - Calcula una coordenada X aleatoria entre [0, width-2]
+ *     y una Y aleatoria entre [0, height-2], para que quepa
+ *     un bloque 2×2 dentro de los límites.
+ *   - Devuelve la posición lineal = y*width + x, que corresponde
+ *     a la esquina superior izquierda de ese bloque 2×2.
+ */
+int randomPosition(int width, int height, int seed) {
+    srand(seed);
+    int x = rand() % (width  - 1);
+    int y = rand() % (height - 1);
+    return y * width + x;
+}
+
+/**
+ * paintLEDs:
+ *   - Recibe un array de punteros a LEDs y un color.
+ *   - Itera desde i=0 hasta i<count-1 y asigna `color`
+ *     al LED apuntado por cada puntero.
+ *   - Se usa tanto para encender segmentos de la serpiente
+ *     (SNAKE_COLOR) como para borrar (BLACK).
+ */
+void paintLEDs(volatile unsigned int* leds[], int count, unsigned int color) {
+    for (int i = 0; i < count; i++)
+        *leds[i] = color;
+}
+
+/**
  * limpiarPantalla:
  *   - Recorre toda la matriz LED de tamaño width×height.
  *   - Asigna el color BLACK (apagado) a cada celda.
@@ -317,6 +416,21 @@ CollisionType checkCollisionByColor(volatile unsigned int* headLeds[2]) {
 void limpiarPantalla(volatile unsigned int* ledBase, int width, int height) {
     for (int i = 0; i < width * height; i++)
         ledBase[i] = BLACK;
+}
+
+/**
+ * isFreeZone:
+ *   - Comprueba si un bloque 2×2 en la posición lineal `pos`
+ *     está completamente libre (todos BLACK).
+ *   - Útil antes de colocar la manzana para no solaparse con
+ *     la serpiente ni con los bordes.
+ *   - Devuelve 1 (verdadero) si todos los LEDs están en BLACK.
+ */
+int isFreeZone(volatile unsigned int* ledBase, int pos, int width) {
+    return ledBase[pos]            == BLACK &&
+           ledBase[pos + 1]        == BLACK &&
+           ledBase[pos + width]    == BLACK &&
+           ledBase[pos + width + 1]== BLACK;
 }
 
 /**
