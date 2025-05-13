@@ -28,12 +28,26 @@ typedef struct snake {
     int   length;
 } SnakeType;
 
+// Manzana representada como un bloque 2×2 LEDs
+typedef struct apple {
+    volatile unsigned int** sections;
+} AppleType;
 
 // Posibles direcciones de movimiento
 typedef enum { RIGHT, LEFT, UP, DOWN } motion;
 
 // Tipos de colisiones detectables
 typedef enum { COLLISION_NONE, COLLISION_SELF, COLLISION_APPLE } CollisionType;
+
+
+/*─── FUNCIONES: MANZANA ──────────────────────────────────────────────────────*/
+
+                // Inicializa la estructura de la manzana
+AppleType*      initializeApple(volatile unsigned int* ledBase, int width);
+                // Genera una nueva posición aleatoria para la manzana
+int             generateApplePosition(AppleType* apple, volatile unsigned int* ledBase, int width, int height, int seed);
+                // Actualiza posición y LEDs de la manzana tras ser comida
+void            updateApple(AppleType* apple, volatile unsigned int* ledBase, int width, int height, int* seed);
 
 /*─── FUNCIONES: SNAKE ────────────────────────────────────────────────────────*/
 
@@ -47,6 +61,15 @@ void            growSnake(SnakeType* snake, motion currentDir, int width);
 CollisionType   checkCollisionByColor(volatile unsigned int* headLeds[2]);
 
 /*─── FUNCIONES: UTILIDADES ────────────────────────────────────────────────────*/
+            // Genera una posición aleatoria en la matriz LED
+int         randomPosition(int width, int height, int seed);
+            // Pinta un conjunto de LEDs con el color indicado
+void        paintLEDs(volatile unsigned int* leds[], int count, unsigned int color);
+            // Limpia toda la pantalla (matriz LED)
+void        limpiarPantalla(volatile unsigned int* ledBase, int width, int height);
+            // Verifica si un bloque 2×2 LEDs está libre (sin color)
+int         isFreeZone(volatile unsigned int* ledBase, int pos, int width);
+
 
 int         checkBoundary(int headX, int headY, int width, int height);
             // Crea un nodo nuevo dado una base LED (superior izquierda)
