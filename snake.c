@@ -5,7 +5,7 @@
 #define SW0 (0x01)
 
 /*─── DELAY ─────────────────────────────────────────────────────────────────*/
-#define LOOPS_PER_MS  2500
+#define LOOPS_PER_MS  1000
 
 /*─── CONFIGURACIÓN DE COLORES ──────────────────────────────────────────────*/
 #define APPLE_COLOR 0x00e100
@@ -144,7 +144,7 @@ int main() {
                 case UP:    newY--; break;
                 case DOWN:  newY++; break;
                 case LEFT:  newX--; break;
-                case RIGHT: newX++; break;
+                case RIGHT: newX+=2; break;
             }
 
             // 7.4) Detectar colisión con el borde antes de mover
@@ -203,10 +203,10 @@ int main() {
         while (!(*switch_base & SW0)) {
             // Enciende naranja
             *corner_led = ORANGE_COLOR;
-            delay_ms(1);
+            delay_ms(2);
             // Apaga
             *corner_led = BLACK;
-            delay_ms(1);
+            delay_ms(2);
         }
         // Al pulsar SW0, sale del bucle y reinicia la partida
     }
